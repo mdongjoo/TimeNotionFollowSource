@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.geungeunhanjan.mapper.lifes.FollowMapper">
+
+
+    <!-- 팔로우 다음 시퀀스    -->
+    <select id="getFollowSeqNext" resultType="Long">
+        SELECT SEQ_FOLLOW.nextval from dual
+    </select>
+
+    <!-- 나를 팔로우한 사람의 정보 조회 ; 팔로워 -->
+    <select id="selectFollower" resultType="FollowDTO" parameterType="long">
+        SELECT u.UNI_ID                                                                 AS followerId,
+               NVL(gu.USER_NICKNAME, gk.name)                                           AS userNickname,
+               (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_FROM_USER = u.UNI_ID) AS followingCount,
+               (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_TO_USER = u.UNI_ID)   AS followerCount,
+               uf.USER_FILE_PROFILE_SOURCE, uf.USER_FILE_PROFILE_NAME , uf.USER_FILE_PROFILE_UUID,
+               uf.USER_FILE_BACK_SOURCE, uf.USER_FILE_BACK_NAME , uf.USER_FILE_BACK_UUID
+        FROM GGHJ_UNI u
+                 LEFT JOIN GGHJ_USER gu ON u.USER_ID = gu.USER_ID
+                 LEFT JOIN GGHJ_KAKAO gk ON u.KAKAO_ID = gk.KAKAO_ID
+                 LEFT JOIN GGHJ_USER_FILE uf ON u.UNI_ID = uf.USER_ID
+        WHERE u.UNI_ID IN (SELECT FOLLOW_TO_USER FROM GGHJ_FOLLOW WHERE FOLLOW_FROM_USER = #{uniId})
+    </select>
+
+    <!-- 팔로우 리스트중 한개 클릭시 남의 상세페이지 조회하는 쿼리문     -->
+    <select id="selectFollowDetail" resultType="FollowDTO">
+        SELECT u.USER_ID                                                                 AS followerId,
+               u.USER_NICKNAME                                                           AS userNickname,
+               (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_FROM_USER = u.USER_ID) AS followingCount,
+               (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_TO_USER = u.USER_ID)   AS followerCount,
+               f.USER_FILE_PROFILE_SOURCE,
+               f.USER_FILE_BACK_SOURCE
+        FROM GGHJ_USER u
+                 LEFT JOIN GGHJ_USER_FILE f ON u.USER_ID = f.USER_ID
+        WHERE u.USER_ID = #{uniId}
+          AND EXISTS (SELECT 1 FROM GGHJ_UNI WHERE USER_ID = u.USER_ID AND UNI_ID = #{uniId})
+        UNION ALL
+        SELECT k.KAKAO_ID                                                                 AS followingId,
+               k.name                                                                     AS userNickname,
+               (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_FROM_USER = k.KAKAO_ID) AS followingCount,
+               (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_TO_USER = k.KAKAO_ID)   AS followerCount,
+               ff.USER_FILE_PROFILE_SOURCE,
+               ff.USER_FILE_BACK_SOURCE
+        FROM GGHJ_KAKAO k
+                 LEFT JOIN GGHJ_USER_FILE ff ON k.KAKAO_ID = ff.USER_ID
+        WHERE k.KAKAO_ID = #{uniId}
+          AND EXISTS (SELECT 1 FROM GGHJ_UNI WHERE KAKAO_ID = k.KAKAO_ID AND UNI_ID = #{uniId})
+    </select>
+
+    <!-- 상세페이지의 about 글 불러오기     -->
+    <select id="selectFollowAbout" resultType="UniVO">
+        SELECT UNI_ABOUT
+        FROM GGHJ_UNI
+        WHERE UNI_ID = #{userId}
+    </select>
+
+
+
+    <!-- 내가 팔로우한 사람의 정보 조회 ; 팔로잉 -->
+        <select id="selectFollowing" resultType="FollowDTO" parameterType="long">
+            SELECT u.UNI_ID AS followerId,
+            NVL(gu.USER_NICKNAME, gk.name) AS userNickname,
+            (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_FROM_USER = u.UNI_ID) AS followingCount,
+            (SELECT COUNT(*) FROM GGHJ_FOLLOW f WHERE f.FOLLOW_TO_USER = u.UNI_ID) AS followerCount,
+            uf.USER_FILE_PROFILE_SOURCE, uf.USER_FILE_PROFILE_NAME , uf.USER_FILE_PROFILE_UUID,
+            uf.USER_FILE_BACK_SOURCE, uf.USER_FILE_BACK_NAME , uf.USER_FILE_BACK_UUID
+            FROM GGHJ_UNI u
+            LEFT JOIN GGHJ_USER gu ON u.USER_ID = gu.USER_ID
+            LEFT JOIN GGHJ_KAKAO gk ON u.KAKAO_ID = gk.KAKAO_ID
+            LEFT JOIN GGHJ_USER_FILE uf ON u.UNI_ID = uf.USER_ID
+            WHERE u.UNI_ID IN (SELECT FOLLOW_FROM_USER FROM GGHJ_FOLLOW WHERE FOLLOW_TO_USER = #{uniId})-->
+        </select>
+
+
+
+
+    <!-- 팔로워, 팔로잉 리스트에 들어온 회원들의 보드 수를 체크하는 쿼리문     -->
+<!--수정 필요 보드수를 안넣으면 삭제해야할 수 도 있는 매퍼 쿼리문 -->
+        <select id="selectBoardCount" resultType="int" parameterType="Long">
+            SELECT COUNT(b.BOARD_ID) AS BOARD_COUNT
+            FROM GGHJ_BOARD b
+                     JOIN GGHJ_UNI u ON b.USER_ID = u.UNI_ID
+                     LEFT JOIN GGHJ_USER uu ON u.USER_ID = uu.USER_ID
+                     LEFT JOIN GGHJ_KAKAO k ON u.KAKAO_ID = k.KAKAO_ID
+            WHERE b.USER_ID = #{userId}
+              AND (uu.USER_ID IS NOT NULL OR k.KAKAO_ID IS NOT NULL)
+        </select>
+
+
+    <!-- 남의 페이지 해당 유저 팔로우 하기      -->
+    <insert id="insertFollow" parameterType="FollowVO">
+        INSERT INTO GGHJ_FOLLOW (FOLLOW_ID , FOLLOW_TO_USER, FOLLOW_FROM_USER)
+        VALUES(#{followId},#{followToUser},#{followFromUser})
+    </insert>
+    <!--    남의 페이지 해당 유저 언팔로우 하기 -->
+    <delete id="deleteFollow" parameterType="FollowHeartDTO">
+        DELETE FROM GGHJ_FOLLOW
+        WHERE FOLLOW_TO_USER = #{followToUser} AND FOLLOW_FROM_USER = #{followFromUser}
+    </delete>
+    <!-- 팔로우 상태 확인하기     -->
+    <select id="selectFollowStatus" parameterType="FollowHeartDTO" resultType="int">
+        SELECT COUNT(*) FROM GGHJ_FOLLOW
+        WHERE FOLLOW_TO_USER = #{followToUser} AND FOLLOW_FROM_USER = #{followFromUser}
+    </select>
+
+    <select id="selectTotalFollow" resultType="int">
+        SELECT COUNT(UNI_ID) FROM GGHJ_UNI
+    </select>
+
+
+    <!-- 팔로워 프사 가져오기 -->
+    <select id="getFollowFileList" resultType="FollowFileList">
+        SELECT u.UNI_ID AS FOLLOW_ID , u.NICKNAME , uf.USER_FILE_PROFILE_NAME , uf.USER_FILE_PROFILE_SOURCE , uf.USER_FILE_PROFILE_UUID
+        FROM GGHJ_UNI u
+                 LEFT JOIN GGHJ_USER gu ON u.USER_ID = gu.USER_ID
+                 LEFT JOIN GGHJ_KAKAO gk ON u.KAKAO_ID = gk.KAKAO_ID
+                 LEFT JOIN GGHJ_USER_FILE uf ON u.UNI_ID = uf.USER_ID
+        WHERE U.UNI_ID = #{followId}
+    </select>
+</mapper>
